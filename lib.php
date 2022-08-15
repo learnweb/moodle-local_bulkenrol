@@ -34,10 +34,9 @@ function local_bulkenrol_extend_navigation_course($navigation, $course, $context
         $url = new moodle_url('/local/bulkenrol/index.php', array('id' => $course->id));
         $bulkenrolnode = navigation_node::create(get_string('pluginname', 'local_bulkenrol'), $url,
                 navigation_node::TYPE_SETTING, null, 'local_bulkenrol', new pix_icon('i/users', ''));
-        $usersnode = $navigation->get('users');
 
-        if (isset($bulkenrolnode) && !empty($usersnode)) {
-            $usersnode->add_node($bulkenrolnode);
+        if (isset($bulkenrolnode)) {
+            $navigation->add_node($bulkenrolnode);
         }
     }
 }
