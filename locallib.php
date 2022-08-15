@@ -46,7 +46,7 @@ function local_bulkenrol_check_user_data($userdatatext, $courseid, $datafield = 
     $checkeddata = new stdClass();
     $checkeddata->data_to_ignore = array();
     $checkeddata->error_messages = array();
-    $checkeddata->moodleusers_for_data = array();
+    $checkeddata->moodleusersfordata = array();
     $checkeddata->course_groups = array();
     $checkeddata->user_groups = array();
     $checkeddata->user_enroled = array();
@@ -59,7 +59,7 @@ function local_bulkenrol_check_user_data($userdatatext, $courseid, $datafield = 
         return $checkeddata;
     }
 
-    $datafieldsstring = get_config('local_bulkenrol', 'fieldoptions');#
+    $datafieldsstring = get_config('local_bulkenrol', 'fieldoptions');
     $datafields = explode(",", $datafieldsstring);
     if (!is_array($datafields) || !in_array($datafield, $datafields)) {
         return $checkeddata;
@@ -140,18 +140,18 @@ function local_bulkenrol_check_data($data, $datafield, $linecnt, $courseid, $con
     if ($createuseronthefly && !empty($error) &&
         $error == get_string('error_no_record_found_for_data', 'local_bulkenrol', $data)) {
         $checkeddata->validusersfound += 1;
-        $checkeddata->users_to_be_created [] = $data;
+        $checkeddata->users_to_be_created[] = $data;
         if (!array_key_exists($data, $checkeddata->user_groups)) {
             $checkeddata->user_groups[$data] = array();
         }
-        if(!empty($currentgroup)) {
+        if (!empty($currentgroup)) {
             $groupinfo = html_writer::tag('span',
                 get_string('user_groups_yes', 'local_bulkenrol'),
                 array('class' => 'badge badge-secondary'));
             $checkeddata->user_groups[$data][] = $currentgroup . $groupinfo;
         }
 
-    }else if (!empty($error)) {
+    } else if (!empty($error)) {
         $checkeddata->data_to_ignore[] = $data;
         if (array_key_exists($linecnt, $checkeddata->error_messages)) {
             $errors = $checkeddata->error_messages[$linecnt];
@@ -166,7 +166,7 @@ function local_bulkenrol_check_data($data, $datafield, $linecnt, $courseid, $con
         if (!empty($context) && !empty($userrecord)) {
             $useralreadyenroled = is_enrolled($context, $userrecord->id);
         }
-        $checkeddata->moodleusers_for_data[$data] = $userrecord;
+        $checkeddata->moodleusersfordata[$data] = $userrecord;
         if (empty($useralreadyenroled)) {
             $checkeddata->user_enroled[$data] = $userrecord;
         }
@@ -189,7 +189,7 @@ function local_bulkenrol_check_data($data, $datafield, $linecnt, $courseid, $con
                 $checkeddata->error_messages[$linecnt] = $error;
             }
             $alreadymember = $result->already_member;
-            // Compose group information
+            // Compose group information.
             if (empty($alreadymember)) {
                 $groupinfo = html_writer::tag('span',
                         get_string('user_groups_yes', 'local_bulkenrol'),
@@ -262,7 +262,8 @@ function local_bulkenrol_get_user($data, $datafield) {
         if (!empty($count)) {
             // More than one user with data -> ignore data and don't enrol users later!
             if ($count > 1) {
-                $error = get_string('error_more_than_one_record_for_data', 'local_bulkenrol', array('identifier' => $data, "field" => $datafield));
+                $error = get_string('error_more_than_one_record_for_data', 'local_bulkenrol',
+                    array('identifier' => $data, "field" => $datafield));
             } else {
                 $userrecord = current($userrecords);
             }
@@ -296,15 +297,15 @@ function create_users(&$localbulkenroldata) {
     if (count($userstocreate) > 0 && empty($emailsuffix)) {
         throw new \Exception("Emailsuffix may not be empty");
     }
-    foreach($userstocreate as $username) {
+    foreach ($userstocreate as $username) {
         $user = new \stdClass();
         $user->username = $username;
         $user->firstname = "NOCH NICHT";
         $user->lastname = "EINGELOGGT";
         $user->email = $username . '@' . $emailsuffix;
-        $new_user_id = user_create_user($user);
-        $new_user = \core_user::get_user($new_user_id);
-        $localbulkenroldata->moodleusers_for_data[] = $new_user;
+        $newuserid = user_create_user($user);
+        $newuser = \core_user::get_user($newuserid);
+        $localbulkenroldata->moodleusersfordata[] = $newuser;
     }
 }
 
@@ -335,7 +336,7 @@ function local_bulkenrol_users($localbulkenrolkey) {
                 }
 
                 create_users($localbulkenroldata);
-                $userstoenrol = $localbulkenroldata->moodleusers_for_data;
+                $userstoenrol = $localbulkenroldata->moodleusersfordata;
 
                 if (!empty($courseid) && !empty($userstoenrol)) {
                     try {
@@ -554,8 +555,8 @@ function local_bulkenrol_display_table($localbulkenroldata, $key) {
             case LOCALBULKENROL_ENROLUSERS:
                 $rowdata = array();
 
-                if (!empty($localbulkenroldata->moodleusers_for_data)) {
-                    foreach ($localbulkenroldata->moodleusers_for_data as $data => $user) {
+                if (!empty($localbulkenroldata->moodleusersfordata)) {
+                    foreach ($localbulkenroldata->moodleusersfordata as $data => $user) {
                         $row = array();
 
                         $cell = new html_table_cell();

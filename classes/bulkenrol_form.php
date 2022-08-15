@@ -53,8 +53,8 @@ class bulkenrol_form extends moodleform {
         // Selector for database field to match list to.
         $availablefieldsstring = get_config('local_bulkenrol', 'fieldoptions');
         $availablefieldsarray = explode(',', $availablefieldsstring);
-        if (count($availablefieldsarray) < 1 or $availablefieldsarray[0] == '') {
-            print_error(get_string('error_no_options_available', 'local_bulkenrol'));
+        if (count($availablefieldsarray) < 1 || $availablefieldsarray[0] == '') {
+            throw new moodle_exception(get_string('error_no_options_available', 'local_bulkenrol'));
         }
 
         $selectoptions = [];
@@ -64,7 +64,8 @@ class bulkenrol_form extends moodleform {
 
         // Format CSV, replace last , with 'or' and add spaces after remaining.
         $fieldnamestring = implode(', ', $selectoptions);
-        $formattedfieldnamestring = $this->str_last_replace(', ', ' ' . get_string('or', 'local_bulkenrol') . ' ', $fieldnamestring);
+        $formattedfieldnamestring = $this->str_last_replace(', ', ' ' .
+            get_string('or', 'local_bulkenrol') . ' ', $fieldnamestring);
 
         // Infotext.
         $msg = get_string('bulkenrol_form_intro', 'local_bulkenrol', $formattedfieldnamestring);
