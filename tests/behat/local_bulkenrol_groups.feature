@@ -38,8 +38,8 @@ Feature: Using the local_bulkenrol plugin for group management
       | Group 3 | C1     | CG3      |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I navigate to "Users > User bulk enrolment" in current page administration
-    And I set the field "List of users identified by your chosen field" to multiline:
+    And I navigate to "User bulk enrolment" in current page administration
+    And I set the field "List of users identified by their email" to multiline:
       """
       # Group 1
       student1@example.com
@@ -77,8 +77,8 @@ Feature: Using the local_bulkenrol plugin for group management
       | Group 2 | C1     | CG2      |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I navigate to "Users > User bulk enrolment" in current page administration
-    And I set the field "List of users identified by your chosen field" to multiline:
+    And I navigate to "User bulk enrolment" in current page administration
+    And I set the field "List of users identified by their email" to multiline:
       """
       # Group 1
       student1@example.com
@@ -115,8 +115,8 @@ Feature: Using the local_bulkenrol plugin for group management
       | CG2   | student2 |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I navigate to "Users > User bulk enrolment" in current page administration
-    And I set the field "List of users identified by your chosen field" to multiline:
+    And I navigate to "User bulk enrolment" in current page administration
+    And I set the field "List of users identified by their email" to multiline:
       """
       # Group 1
       student1@example.com
@@ -144,8 +144,8 @@ Feature: Using the local_bulkenrol plugin for group management
       | Group 1 | C1     | CG1      |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I navigate to "Users > User bulk enrolment" in current page administration
-    And I set the field "List of users identified by your chosen field" to multiline:
+    And I navigate to "User bulk enrolment" in current page administration
+    And I set the field "List of users identified by their email" to multiline:
       """
       # Group 1
       student1@example.com
