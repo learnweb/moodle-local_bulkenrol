@@ -135,6 +135,12 @@ class bulkenrol_form extends moodleform {
         return $retval;
     }
 
+    /**
+     * Local feature for WWU to get field.
+     * @param $fieldoption
+     * @return false|mixed|string
+     * @throws \dml_exception
+     */
     private function get_fieldname($fieldoption) {
         global $DB;
         $fieldinfo = explode("_", $fieldoption, 2);
@@ -148,6 +154,13 @@ class bulkenrol_form extends moodleform {
         }
     }
 
+    /**
+     * Replaces the last occurrence of an String in another String.
+     * @param $search
+     * @param $replace
+     * @param $subject
+     * @return array|mixed|string|string[]
+     */
     private function str_last_replace($search, $replace, $subject) {
         $pos = strrpos($subject, $search);
 

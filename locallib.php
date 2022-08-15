@@ -291,6 +291,12 @@ function local_bulkenrol_get_exception_info($e) {
     return " ".get_string('error_exception_info', 'local_bulkenrol').": ".$e->getMessage()." -> ".$e->getTraceAsString();
 }
 
+/**
+ * Added for fork - creates user if not logged in to the system yet.
+ * @param $localbulkenroldata
+ * @throws dml_exception
+ * @throws moodle_exception
+ */
 function create_users(&$localbulkenroldata) {
     $userstocreate = $localbulkenroldata->users_to_be_created;
     $emailsuffix = get_config('local_bulkenrol', 'email_suffix');
