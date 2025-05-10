@@ -9,11 +9,11 @@ Feature: Using the local_bulkenrol plugin for user enrolments
       | fullname | shortname | format |
       | Course 1 | C1        | topics |
     And the following "users" exist:
-      | username  | firstname | lastname | email                |
-      | teacher1  | Teacher   | 1        | teacher1@example.com |
-      | student1  | Student   | 1        | student1@example.com |
-      | student2  | Student   | 2        | student2@example.com |
-      | student3  | Student   | 3        | student3@example.com |
+      | idnumber | username  | firstname | lastname | email                |
+      | 1        | teacher1  | Teacher   | 1        | teacher1@example.com |
+      | 2        | student1  | Student   | 1        | student1@example.com |
+      | 3        | student2  | Student   | 2        | student2@example.com |
+      | 4        | student3  | Student   | 3        | student3@example.com |
     And the following "course enrolments" exist:
       | user     | course | role           |
       | teacher1 | C1     | editingteacher |
@@ -133,10 +133,12 @@ Feature: Using the local_bulkenrol plugin for user enrolments
     And I log out
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I navigate to "Users > User bulk enrolment" in current page administration
-    Then the "dbfield" select box should contain "email"
-    And the "dbfield" select box should contain "idnumber"
-    And the "dbfield" select box should contain "username"
+    And I select "Participants" from secondary navigation
+    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
+    Then the "id_dbfield" select box should contain "Email address"
+    And the "dbfield" select box should contain "ID number"
+    And the "dbfield" select box should contain "Username"
+    And I set the field "dbfield" to "ID number"
     And I set the field "List of users identified by your chosen field" to multiline:
       """
       2
@@ -145,19 +147,58 @@ Feature: Using the local_bulkenrol plugin for user enrolments
       """
     And I click on "Enrol users" "button"
     Then the following should exist in the "localbulkenrol_enrolusers" table:
-      | idnumber        | First name | Surname | User enrolment        |
-      | 1 | Student    | 1       | User will be enrolled |
-      | 2 | Student    | 2       | User will be enrolled |
-      | 3 | Student    | 3       | User will be enrolled |
+      | Data | First name | Last name | User enrolment        |
+      | 2 | Student    | 1       | User will be enrolled |
+      | 3 | Student    | 2       | User will be enrolled |
+      | 4 | Student    | 3       | User will be enrolled |
     And the following should exist in the "localbulkenrol_enrolinfo" table:
       | Enrolment method  | Assigned role |
       | Manual enrolments | Student       |
     And I click on "Enrol users" "button"
     Then the following should exist in the "participants" table:
-      | Email address        | First name | Surname | Roles   |
+      | Email address        | First name | Last name | Roles   |
       | student1@example.com | Student    | 1       | Student |
       | student2@example.com | Student    | 2       | Student |
       | student3@example.com | Student    | 3       | Student |
+    When I click on "[data-enrolinstancename='Manual enrolments'] a[data-action=showdetails]" "css_element" in the "Student 1" "table_row"
+    Then I should see "Manual enrolments"
+
+  Scenario: Bulk enrol users into the course by their Username
+    Given I log in as "admin"
+    And I navigate to "Plugins > Enrolments > User bulk enrolment" in site administration
+    And I set the following fields to these values:
+      | Fieldoptions | idnumber,email,username |
+    And I press "Save changes"
+    And I log out
+    When I log in as "teacher1"
+    And I am on "Course 1" course homepage
+    And I select "Participants" from secondary navigation
+    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
+    Then the "id_dbfield" select box should contain "Email address"
+    And the "dbfield" select box should contain "ID number"
+    And the "dbfield" select box should contain "Username"
+    And I set the field "dbfield" to "Username"
+    And I set the field "List of users identified by your chosen field" to multiline:
+      """
+      student1
+      student2
+      student3
+      """
+    And I click on "Enrol users" "button"
+    Then the following should exist in the "localbulkenrol_enrolusers" table:
+      | Data      | First name | Last name | User enrolment        |
+      | student1 | Student    | 1         | User will be enrolled |
+      | student2 | Student    | 2         | User will be enrolled |
+      | student3 | Student    | 3         | User will be enrolled |
+    And the following should exist in the "localbulkenrol_enrolinfo" table:
+      | Enrolment method  | Assigned role |
+      | Manual enrolments | Student       |
+    And I click on "Enrol users" "button"
+    Then the following should exist in the "participants" table:
+      | Email address        | First name | Last name | Roles   |
+      | student1@example.com | Student    | 1         | Student |
+      | student2@example.com | Student    | 2         | Student |
+      | student3@example.com | Student    | 3         | Student |
     When I click on "[data-enrolinstancename='Manual enrolments'] a[data-action=showdetails]" "css_element" in the "Student 1" "table_row"
     Then I should see "Manual enrolments"
 
