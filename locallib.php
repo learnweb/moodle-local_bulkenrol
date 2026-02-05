@@ -22,6 +22,10 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once('../../user/lib.php');
+
 use core_table\output\html_table_cell;
 use core\output\html_writer;
 
@@ -31,275 +35,284 @@ define('LOCALBULKENROL_UNENROLUSERS', 'unenrolusers');
 define('LOCALBULKENROL_GROUPINFOS', 'groupinfos');
 
 /**
- * Check list of submitted user mails and creates a data structure for displaying information on the confirm page and
+ * Check list of submitted user data and creates a data structure for displaying information on the confirm page and
  * for performing the bulkenrol.
  *
- * @param string $emailstextfield Text field value to be checked for emails and course groups.
+ * @param string $userdatatext Text field value to be checked for identifying data and course groups.
  * @param int $courseid ID of the course, used to determine the context for checking whether a user is already enroled.
+ * @param string $datafield To which database field to compare the user data.
+ * u_* for Fields of the user-table, c_* for custom fields.
  *
  * @return stdClass Object containing information to be displayed on confirm page and being used for bulkenrol.
  */
-function local_bulkenrol_check_user_mails($emailstextfield, $courseid) {
+function local_bulkenrol_check_user_data($userdatatext, $courseid, $datafield = 'u_email') {
 
-    $checkedemails = new stdClass();
-    $checkedemails->emails_to_ignore = [];
-    $checkedemails->error_messages = [];
-    $checkedemails->moodleusers_for_email = [];
-    $checkedemails->course_groups = [];
-    $checkedemails->user_groups = [];
-    $checkedemails->validemailfound = 0;
+    $checkeddata = new stdClass();
+    $checkeddata->data_to_ignore = array();
+    $checkeddata->error_messages = array();
+    $checkeddata->moodleusers_for_data = array();
+    $checkeddata->course_groups = array();
+    $checkeddata->user_groups = array();
+    $checkeddata->user_enroled = array();
+    $checkeddata->validusersfound = 0;
+    $checkeddata->users_to_be_created = array();
 
-    $emaildelimiters = [', ', ' ', ','];
+    $possibledelimiters = array(', ', ' ', ',');
 
-    if (!empty($emailstextfield)) {
-        $emailslines = local_bulkenrol_parse_emails($emailstextfield);
+    if (empty($userdatatext)) {
+        return $checkeddata;
+    }
 
-        $linecnt = 0;
+    $datafieldsstring = get_config('local_bulkenrol', 'fieldoptions');#
+    $datafields = explode(",", $datafieldsstring);
+    if (!is_array($datafields) || !in_array($datafield, $datafields)) {
+        return $checkeddata;
+    }
 
-        $currentgroup = '';
+    $datalines = local_bulkenrol_parse_data($userdatatext);
 
-        $context = null;
+    $linecnt = 0;
 
-        if (!empty($courseid)) {
-            $context = context_course::instance($courseid, MUST_EXIST);
+    $currentgroup = '';
+
+    $context = null;
+
+    if (!empty($courseid)) {
+        $context = context_course::instance($courseid, MUST_EXIST);
+    }
+
+    // Process data from textfield.
+    foreach ($datalines as $dataline) {
+        $linecnt++;
+
+        $error = '';
+
+        $dataline = trim($dataline);
+
+        // Check for course group.
+        $grouppos = strpos($dataline, '#');
+        if ($grouppos !== false) {
+
+            $groupname = substr($dataline, $grouppos + 1);
+            $currentgroup = trim($groupname);
+            $checkeddata->course_groups[$currentgroup] = array();
+            continue;
         }
 
-        // Process emails from textfield.
-        foreach ($emailslines as $emailline) {
-            $linecnt++;
-
-            $error = '';
-
-            $emailline = trim($emailline);
-
-            // Check for delete enrolment.
-            $delenrolpos = strpos($emailline, '!');
-            if ($delenrolpos !== false) {
-                // Remeber the delete flag and clean the email line from it to have it processed further.
-                $emailline = trim(substr($emailline, $delenrolpos + 1));
+        // Check delimiters.
+        foreach ($possibledelimiters as $possibledelimiter) {
+            $pos = strpos($dataline, $possibledelimiter);
+            if ($pos) {
+                $delimiter = $possibledelimiter;
+                break;
             }
+        }
+        if (empty($delimiter)) {
+            // Could possibly be only one students data.
+            local_bulkenrol_check_data($dataline, $datafield, $linecnt, $courseid, $context, $currentgroup, $checkeddata);
+        } else {
+            $alldatainline = explode($delimiter, $dataline);
 
-            // Check for course group.
-            $grouppos = strpos($emailline, '#');
-            if ($grouppos !== false) {
-                $groupname = substr($emailline, $grouppos + 1);
-                $currentgroup = trim($groupname);
-                $checkedemails->course_groups[$currentgroup] = [];
-                continue;
-            }
-
-            // Check number of emails in current row/line.
-            $emailsinlinecnt = substr_count($emailline, '@');
-
-            // No email in row/line.
-            if ($emailsinlinecnt == 0) {
-                $a = new stdClass();
-                $a->line = $linecnt;
-                $a->content = $emailline;
-                if (trim($a->content != "")) {
-                    $error = get_string('error_no_email', 'local_bulkenrol', $a);
-                } else {
-                    $error = get_string('error_empty_line', 'local_bulkenrol', $a);
-                }
-                $checkedemails->error_messages[$linecnt] = $error;
-
-                // One email in row/line.
-            } else if ($emailsinlinecnt == 1) {
-                $email = $emailline;
-                local_bulkenrol_check_email(
-                    $email,
-                    $linecnt,
-                    $courseid,
-                    $context,
-                    $currentgroup,
-                    $checkedemails,
-                    $delenrolpos !== false
-                );
-            }
-            // More than one email in row/line.
-            if ($emailsinlinecnt > 1) {
-                $delimiter = '';
-
-                // Check delimiters.
-                foreach ($emaildelimiters as $emaildelimiter) {
-                    $pos = strpos($emailline, $emaildelimiter);
-                    if ($pos) {
-                        $delimiter = $emaildelimiter;
-                        break;
-                    }
-                }
-                if (!empty($delimiter)) {
-                    $emailsinline = explode($delimiter, $emailline);
-
-                    // Iterate emails in row/line.
-                    foreach ($emailsinline as $emailinline) {
-                        $email = trim($emailinline);
-                        local_bulkenrol_check_email(
-                            $email,
-                            $linecnt,
-                            $courseid,
-                            $context,
-                            $currentgroup,
-                            $checkedemails,
-                            $delenrolpos !== false
-                        );
-                    }
-                }
+            // Iterate over students data in row/line.
+            foreach ($alldatainline as $datainline) {
+                $data = trim($datainline);
+                local_bulkenrol_check_data($data, $linecnt, $datafield, $courseid, $context, $currentgroup, $checkeddata);
             }
         }
     }
 
-    return $checkedemails;
+    return $checkeddata;
 }
 
 /**
  *
- * Check submitted email, working on the $checkedemails array
+ * Check submitted user data, working on the $checkeddata array
  *
- * @param string $email e-mail of the user that should be enroled or onenrolled
+ * @param string $data identifying data of the user that should be enroled
+ * @param string $datafield To which database field to compare the user data.
+ * u_* for Fields of the user-table, c_* for custom fields.
  * @param int $linecnt line counter used for error messages
  * @param int $courseid course id
- * @param context_course $context context instance of the course the user should be enroled into or unenroled from
+ * @param context_course $context context instance of the course the user should be enroled into
  * @param string $currentgroup name of the group a user should be added to as member
- * @param object $checkedemails Object containing information to be displayed on confirm page and being used for bulkenrol.
- * @param bool $unenrol true if the user should be unenroled from the course
+ * @param object $checkeddata Object containing information to be displayed on confirm page and being used for bulkenrol.
  */
-function local_bulkenrol_check_email($email, $linecnt, $courseid, $context, $currentgroup, &$checkedemails, $unenrol = false) {
-    // Check for valid email.
-    $emailisvalid = validate_email($email);
+function local_bulkenrol_check_data($data, $datafield, $linecnt, $courseid, $context, $currentgroup, &$checkeddata) {
+    $createuseronthefly = get_config('local_bulkenrol', 'create_on_the_fly');
+    // Check for moodle user with specified data.
+    list($error, $userrecord) = local_bulkenrol_get_user($data, $datafield);
+    if ($createuseronthefly && !empty($error) &&
+        $error == get_string('error_no_record_found_for_data', 'local_bulkenrol', $data)) {
+        $checkeddata->validusersfound += 1;
+        $checkeddata->users_to_be_created [] = $data;
+        if (!array_key_exists($data, $checkeddata->user_groups)) {
+            $checkeddata->user_groups[$data] = array();
+        }
+        if(!empty($currentgroup)) {
+            $groupinfo = html_writer::tag('span',
+                get_string('user_groups_yes', 'local_bulkenrol'),
+                array('class' => 'badge badge-secondary'));
+            $checkeddata->user_groups[$data][] = $currentgroup . $groupinfo;
+        }
 
-    // Email is not valid.
-    if (!$emailisvalid) {
-        $checkedemails->emails_to_ignore[] = $email;
-        $a = new stdClass();
-        $a->row = $linecnt;
-        $a->email = $email;
-        $error = get_string('error_invalid_email', 'local_bulkenrol', $a);
-        if (array_key_exists($linecnt, $checkedemails->error_messages)) {
-            $errors = $checkedemails->error_messages[$linecnt];
+    }else if (!empty($error)) {
+        $checkeddata->data_to_ignore[] = $data;
+        if (array_key_exists($linecnt, $checkeddata->error_messages)) {
+            $errors = $checkeddata->error_messages[$linecnt];
             $errors .= "<br>" . $error;
-            $checkedemails->error_messages[$linecnt] = $errors;
+            $checkeddata->error_messages[$linecnt] = $errors;
         } else {
-            $checkedemails->error_messages[$linecnt] = $error;
+            $checkeddata->error_messages[$linecnt] = $error;
         }
-        return;
-    }
-    // Email is valid.
-    // Check for moodle user with email.
-    try {
-        $userrecord = get_complete_user_data('email', $email, null, true);
-
-        // No user found.
-    } catch (dml_missing_record_exception $e) {
-        $userrecord = null;
-        $checkedemails->error_messages[$linecnt] =
-            get_string('error_no_record_found_for_email', 'local_bulkenrol', $email);
-    } catch (dml_multiple_records_exception $e) {
-        $userrecord = null;
-        $checkedemails->error_messages[$linecnt] =
-            get_string('error_more_than_one_record_for_email', 'local_bulkenrol', $email);
-    } catch (Exception $e) {
-        $userrecord = null;
-        $checkedemails->error_messages[$linecnt] =
-            get_string('error_getting_user_for_email', 'local_bulkenrol', $email);
-    }
-
-    if ($userrecord === null || (int)$userrecord->id === 0) {
-        // No user found, error was set in exception handling above.
-        return;
-    }
-    // A user was found.
-    $checkedemails->validemailfound += 1;
-
-    $useralreadyenroled = false;
-    if (!empty($context)) {
-        $useralreadyenroled = is_enrolled($context, $userrecord->id);
-    }
-    $checkedemails->moodleusers_for_email[$email] = (object)['user' => $userrecord];
-    if ($unenrol === true) {
-        $checkedemails->moodleusers_for_email[$email]->action =
-            empty($useralreadyenroled) ? 'user_unenroled_already' : 'user_unenroled_yes';
-    } else {
-        $checkedemails->moodleusers_for_email[$email]->action =
-            empty($useralreadyenroled) ? 'user_enroled_yes' : 'user_enroled_already';
-    }
-    if (empty($currentgroup)) {
-        return;
-    }
-    if (array_key_exists($currentgroup, $checkedemails->course_groups)) {
-        $checkedemails->course_groups[$currentgroup][] = (object)[
-            'email' => $email,
-            'action' => $unenrol ? 'remove' : 'add',
-        ];
-    }
-    if (!array_key_exists($email, $checkedemails->user_groups)) {
-        $checkedemails->user_groups[$email] = [];
-    }
-    if (!array_key_exists($currentgroup, $checkedemails->user_groups[$email])) {
-        // Check if user is member of the group.
-        $result = local_bulkenrol_is_already_member($courseid, $currentgroup, $userrecord->id);
-        if (!empty($result->error)) {
-            $a = new stdClass();
-            $a->row = $linecnt;
-            $a->email = $email;
-            $a->groupname = $currentgroup;
-            $a->error = $result->error;
-            $error = get_string('error_check_is_already_member', 'local_bulkenrol', $a);
-            $checkedemails->error_messages[$linecnt] = $error;
+    } else if (!empty($userrecord) && !empty($userrecord->id)) {
+        $checkeddata->validusersfound += 1;
+        $useralreadyenroled = false;
+        if (!empty($context) && !empty($userrecord)) {
+            $useralreadyenroled = is_enrolled($context, $userrecord->id);
         }
-        $alreadymember = $result->already_member;
-        // Depending on the member status and the action, the user will be added to or removed from the group.
-        if (empty($alreadymember)) {
-            $groupinfo = $unenrol === true
-                ? html_writer::tag(
-                    'span',
-                    get_string('user_groups_notin', 'local_bulkenrol'),
-                    ['class' => 'badge bg-secondary text-dark']
-                )
-                : html_writer::tag(
-                    'span',
-                    get_string('user_groups_yes', 'local_bulkenrol'),
-                    ['class' => 'badge bg-success text-light']
-                );
-        } else {
-            $groupinfo = $unenrol === true
-                ? html_writer::tag(
-                    'span',
-                    get_string('user_groups_remove', 'local_bulkenrol'),
-                    ['class' => 'badge bg-success text-light']
-                )
-                : html_writer::tag(
-                    'span',
-                    get_string('user_groups_already', 'local_bulkenrol'),
-                    ['class' => 'badge bg-secondary text-dark']
-                );
+        $checkeddata->moodleusers_for_data[$data] = $userrecord;
+        if (empty($useralreadyenroled)) {
+            $checkeddata->user_enroled[$data] = $userrecord;
         }
-        $checkedemails->user_groups[$email][] = '<small>' . $currentgroup . ':</small><br />' . $groupinfo;
-        // When there is the unenrol flag set but a user group exists, do not touch the user enrolment itself.
-        if ($unenrol && $checkedemails->moodleusers_for_email[$email]->action === 'user_unenroled_yes') {
-            $checkedemails->moodleusers_for_email[$email]->action = 'user_enroled_already';
+        if (!empty($currentgroup) && array_key_exists($currentgroup, $checkeddata->course_groups)) {
+            $checkeddata->course_groups[$currentgroup][$data] = $userrecord;
+        }
+        if (!array_key_exists($data, $checkeddata->user_groups)) {
+            $checkeddata->user_groups[$data] = array();
+        }
+        if (!empty($currentgroup) && !array_key_exists($currentgroup, $checkeddata->user_groups[$data])) {
+            // Check if user is already member of the group.
+            $result = local_bulkenrol_is_already_member($courseid, $currentgroup, $userrecord->id);
+            if (!empty($result->error)) {
+                $a = new stdClass();
+                $a->row = $linecnt;
+                $a->data = $data;
+                $a->groupname = $currentgroup;
+                $a->error = $result->error;
+                $error = get_string('error_check_is_already_member', 'local_bulkenrol', $a);
+                $checkeddata->error_messages[$linecnt] = $error;
+            }
+            $alreadymember = $result->already_member;
+            // Compose group information
+            if (empty($alreadymember)) {
+                $groupinfo = html_writer::tag('span',
+                        get_string('user_groups_yes', 'local_bulkenrol'),
+                        array('class' => 'badge badge-secondary'));
+            } else {
+                $groupinfo = html_writer::tag('span',
+                        get_string('user_groups_already', 'local_bulkenrol'),
+                        array('class' => 'badge badge-success'));
+            }
+            $checkeddata->user_groups[$data][] = $currentgroup . $groupinfo;
         }
     }
 }
 
 /**
- * Takes input from text area containing a list of e-mail addresses (optionally group names starting with '#',
- * and e-mail addresses to unenroll starting with '!').
+ * Takes input from text area containing a list of data that specifies users (optionally group names starting with '#').
  * Returns an array representation of the input.
  *
- * @param mixed $emails input value of the text area.
- * @return string[] of e-emails and optional group names
+ * @param mixed $data input value of the text area.
+ * @return string[] of data and optional group names
  */
-function local_bulkenrol_parse_emails($emails) {
-    if (empty($emails)) {
+function local_bulkenrol_parse_data($data) {
+    if (empty($data)) {
         return [];
     } else {
-        $rawlines = explode(PHP_EOL, $emails);
+        $rawlines = explode(PHP_EOL, $data);
         $result = [];
         foreach ($rawlines as $rawline) {
-            $result[] = trim($rawline);
+            $temp = str_replace("@uni-muenster.de", "", $rawline);
+            $result[] = trim($temp);
         }
         return $result;
+    }
+}
+
+/**
+ * Takes an e-mail and returns a moodle user record and error string (if occured).
+ *
+ * @param string $data Data used to search for a user
+ * @param string $datafield To which database field to compare the user data.
+ * u_* for Fields of the user-table, c_* for custom fields.
+ * @return array [string,object[]]
+ */
+function local_bulkenrol_get_user($data, $datafield) {
+    global $DB;
+
+    $error = null;
+    $userrecord = null;
+
+    if (empty($data)) {
+        $error = get_string('error_no_data', 'local_bulkenrol', $data);
+        return array($error, $userrecord);
+    }
+
+    // Get user records for data.
+    try {
+        $prefix = substr($datafield, 0, 2);
+        $usertablefield = substr($datafield, 2, strlen($datafield) - 2);
+        if ($prefix === 'u_') {
+            $userrecords = $DB->get_records('user', array($usertablefield => $data));
+        } else if ($prefix === 'c_') {
+            $userrecords = $DB->get_records_sql(
+                    'SELECT u.* FROM {user} u ' .
+                    'JOIN {user_info_data} data ON data.userid = u.id ' .
+                    'WHERE data.fieldid = :fieldid AND data.data = :data',
+                    array('fieldid' => $usertablefield, 'data' => $data));
+        }
+
+        $count = count($userrecords);
+        if (!empty($count)) {
+            // More than one user with data -> ignore data and don't enrol users later!
+            if ($count > 1) {
+                $error = get_string('error_more_than_one_record_for_data', 'local_bulkenrol', array('identifier' => $data, "field" => $datafield));
+            } else {
+                $userrecord = current($userrecords);
+            }
+        } else {
+            $error = get_string('error_no_record_found_for_data', 'local_bulkenrol', $data);
+        }
+    } catch (Exception $e) {
+        $error = get_string('error_getting_user_for_data', 'local_bulkenrol', $data) . local_bulkenrol_get_exception_info($e);
+    }
+
+    return array($error, $userrecord);
+}
+
+/**
+ * Get an understandable reason from an exception which happened during bulkenrol.
+ *
+ * @param object $e should be of instanceof Exception
+ * @return string readable form of an exception
+ */
+function local_bulkenrol_get_exception_info($e) {
+    if (empty($e) || !($e instanceof Exception) ) {
+        return '';
+    }
+
+    return " ".get_string('error_exception_info', 'local_bulkenrol').": ".$e->getMessage()." -> ".$e->getTraceAsString();
+}
+
+function create_users(&$localbulkenroldata) {
+    global $CFG;
+    $userstocreate = $localbulkenroldata->users_to_be_created;
+    $emailsuffix = get_config('local_bulkenrol', 'email_suffix');
+    if (count($userstocreate) > 0 && empty($emailsuffix)) {
+        throw new \Exception("Emailsuffix may not be empty");
+    }
+    foreach($userstocreate as $username) {
+        $user = new \stdClass();
+        $user->auth = 'ldap';
+        $user->confirmed = true;
+        $user->mnethostid = $CFG->mnet_localhost_id;
+        $user->username = $username;
+        $user->firstname = "NOCH NICHT";
+        $user->lastname = "EINGELOGGT";
+        $user->email = $username . '@' . $emailsuffix;
+        $new_user_id = user_create_user($user);
+        $new_user = \core_user::get_user($new_user_id);
+        $localbulkenroldata->moodleusers_for_data[] = $new_user;
     }
 }
 
@@ -316,10 +329,8 @@ function local_bulkenrol_users($localbulkenrolkey) {
     $exceptionsmsg = [];
 
     if (!empty($localbulkenrolkey)) {
-        if (
-            !empty($localbulkenrolkey) && !empty($SESSION->local_bulkenrol) &&
-                array_key_exists($localbulkenrolkey, $SESSION->local_bulkenrol)
-        ) {
+        if (!empty($localbulkenrolkey) && !empty($SESSION->local_bulkenrol) &&
+                array_key_exists($localbulkenrolkey, $SESSION->local_bulkenrol)) {
             $localbulkenroldata = $SESSION->local_bulkenrol[$localbulkenrolkey];
             if (!empty($localbulkenroldata)) {
                 $error = '';
@@ -331,33 +342,15 @@ function local_bulkenrol_users($localbulkenrolkey) {
                     $courseid = $tmpdata[0];
                 }
 
-                $userstoenrol = array_filter(
-                    $localbulkenroldata->moodleusers_for_email,
-                    fn($f) => $f->action === 'user_enroled_yes'
-                );
-                $userstounenrol = array_filter(
-                    $localbulkenroldata->moodleusers_for_email,
-                    fn($f) => $f->action === 'user_unenroled_yes'
-                );
+                create_users($localbulkenroldata);
+                $userstoenrol = $localbulkenroldata->moodleusers_for_data;
 
-                if (empty($courseid)) {
-                    return local_bulkenrol_get_retval_obj('', [get_string('error_no_courseid', 'local_bulkenrol')]);
-                }
-
-                try {
-                    // Get the course.
-                    $course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
-                    // Get the enrol instances.
-                    $enrolinstances = enrol_get_instances($course->id, false);
-                    // Get the course context.
-                    $coursecontext = context_course::instance($course->id);
-                } catch (\Exception $e) {
-                    return local_bulkenrol_get_retval_obj('', [get_string('error_enrol_users', 'local_bulkenrol')]);
-                }
-
-                // Enrol users.
-                if (!empty($userstoenrol)) {
+                if (!empty($courseid) && !empty($userstoenrol)) {
                     try {
+                        $course = $DB->get_record('course', array('id' => $courseid), '*', MUST_EXIST);
+
+                        $enrolinstances = enrol_get_instances($course->id, false);
+
                         // Get enrolment for bulkenrol.
                         $bulkenrolplugin = get_config('local_bulkenrol', 'enrolplugin');
 
@@ -398,13 +391,11 @@ function local_bulkenrol_users($localbulkenrolkey) {
                             // Enrol users in course.
                             $roleid = get_config('local_bulkenrol', 'role');
 
-                            foreach (array_keys($userstoenrol) as $email) {
-                                try {
-                                    if (!array_key_exists($email, $localbulkenroldata->moodleusers_for_email)) {
-                                        throw new Exception('User not defined for email ' . $email);
-                                    }
-                                    $user = $localbulkenroldata->moodleusers_for_email[$email]->user;
+                            // Get the course context.
+                            $coursecontext = context_course::instance($courseid);
 
+                            foreach ($userstoenrol as $data => $user) {
+                                try {
                                     // Check if user is already enrolled with another enrolment method.
                                     $userisenrolled = is_enrolled($coursecontext, $user->id, '', false);
 
@@ -418,106 +409,72 @@ function local_bulkenrol_users($localbulkenrolkey) {
                                     }
                                 } catch (Exception $e) {
                                     $a = new stdClass();
-                                    $a->email = $email;
+                                    $a->data = $data;
 
-                                    $msg = get_string('error_enrol_user', 'local_bulkenrol', $a);
+                                    $msg = get_string('error_enrol_user', 'local_bulkenrol', $a).
+                                            local_bulkenrol_get_exception_info($e);
                                     $exceptionsmsg[] = $msg;
                                 }
                             }
                         }
                     } catch (Exception $e) {
-                        $msg = get_string('error_enrol_users', 'local_bulkenrol');
+                        $msg = get_string('error_enrol_users', 'local_bulkenrol').local_bulkenrol_get_exception_info($e);
                         $exceptionsmsg[] = $msg;
                     }
-                }
 
-                // Create and handle groups.
-                $groups = $localbulkenroldata->course_groups;
-                if (!empty($groups)) {
-                    try {
-                        require_once($CFG->dirroot . '/group/lib.php');
+                    // Check for course groups to create.
+                    $groups = $localbulkenroldata->course_groups;
 
-                        $existingcoursegroups = groups_get_all_groups($courseid);
+                    if (!empty($groups)) {
 
-                        foreach ($groups as $name => $members) {
-                            $groupname = trim($name);
+                        try {
+                            require_once($CFG->dirroot . '/group/lib.php');
 
-                            // Check if group already exists.
-                            $groupid = null;
-                            foreach ($existingcoursegroups as $existingcoursegroup) {
-                                if ($groupname == $existingcoursegroup->name) {
-                                    $groupid = $existingcoursegroup->id;
-                                    break;
+                            $existingcoursegroups = groups_get_all_groups($courseid);
+
+                            foreach ($groups as $name => $members) {
+                                $groupname = trim($name);
+
+                                // Check if group already exists.
+                                $groupid = null;
+                                foreach ($existingcoursegroups as $key => $existingcoursegroup) {
+                                    if ($groupname == $existingcoursegroup->name) {
+                                        $groupid = $existingcoursegroup->id;
+                                        break;
+                                    }
                                 }
-                            }
-                            // Group not found in course -> create new course group.
-                            if (empty($groupid)) {
-                                $groupdata = new stdClass();
-                                $groupdata->courseid = $courseid;
-                                $groupdata->name = $groupname;
-                                $groupid = groups_create_group($groupdata, false, false);
-                            }
-                            if (!empty($groupid) && !empty($members)) {
-                                foreach ($members as $member) {
-                                    try {
-                                        if (!array_key_exists($member->email, $localbulkenroldata->moodleusers_for_email)) {
-                                            throw new Exception('User not defined for email ' . $email);
-                                        }
-                                        $user = $localbulkenroldata->moodleusers_for_email[$member->email]->user;
+                                // Group not found in course -> create new course group.
+                                if (empty($groupid)) {
+                                    $groupdata = new stdClass();
+                                    $groupdata->courseid = $courseid;
+                                    $groupdata->name = $groupname;
+                                    $groupid = groups_create_group($groupdata, false, false);
+                                }
+                                if (!empty($groupid) && !empty($members)) {
+                                    foreach ($members as $key => $member) {
+                                        try {
+                                            $useradded = groups_add_member($groupid, $member->id);
 
-                                        if ($member->action === 'add') {
-                                            if (!groups_add_member($groupid, $user->id)) {
-                                                throw new Exception();
+                                            if (empty($useradded)) {
+                                                $a = new stdClass();
+                                                $a->data = $key;
+                                                $a->group = $groupname;
+                                                $msg = get_string('error_group_add_member', 'local_bulkenrol', $a);
+                                                $exceptionsmsg[] = $msg;
                                             }
-                                        } else if ($member->action === 'remove') {
-                                            if (!groups_remove_member($groupid, $user->id)) {
-                                                throw new Exception();
-                                            }
+                                        } catch (Exception $e) {
+                                            $a = new stdClass();
+                                            $a->data = $key;
+                                            $a->group = $groupname;
+                                            $msg = get_string('error_group_add_member', 'local_bulkenrol', $a).
+                                                    local_bulkenrol_get_exception_info($e);
+                                            $exceptionsmsg[] = $msg;
                                         }
-                                    } catch (Exception $e) {
-                                        $a = new stdClass();
-                                        $a->email = $user->email;
-                                        $a->group = $groupname;
-                                        $msg = get_string("error_group_{$member->action}_member", 'local_bulkenrol', $a);
-                                        $exceptionsmsg[] = $msg;
                                     }
                                 }
                             }
-                        }
-                    } catch (Exception $e) {
-                        $msg = get_string('error_group_add_members', 'local_bulkenrol');
-                        $exceptionsmsg[] = $msg;
-                    }
-                }
-
-                // Unenrol users.
-                if (!empty($userstounenrol)) {
-                    foreach (array_keys($userstounenrol) as $email) {
-                        try {
-                            if (!array_key_exists($email, $localbulkenroldata->moodleusers_for_email)) {
-                                throw new Exception('User not defined for email ' . $email);
-                            }
-                            $user = $localbulkenroldata->moodleusers_for_email[$email]->user;
-
-                            // Check if user is enrolled in the course.
-                            $userisenrolled = is_enrolled($coursecontext, $user->id);
-
-                            // If the user is enrolled.
-                            if ($userisenrolled) {
-                                // Loop over all enabled enrol instances, and try to unenrol the user.
-                                foreach ($enrolinstances as $instance) {
-                                    $plugin = enrol_get_plugin($instance->enrol);
-                                    $plugin->unenrol_user($instance, $user->id);
-                                }
-
-                                // Otherwise, if user is not enroled in the course.
-                            } else {
-                                continue;
-                            }
                         } catch (Exception $e) {
-                            $a = new stdClass();
-                            $a->email = $email;
-                            $msg = get_string('error_unenrol_user', 'local_bulkenrol', $a);
+                            $msg = get_string('error_group_add_members', 'local_bulkenrol').local_bulkenrol_get_exception_info($e);
                             $exceptionsmsg[] = $msg;
                         }
                     }
@@ -525,17 +482,7 @@ function local_bulkenrol_users($localbulkenrolkey) {
             }
         }
     }
-    return local_bulkenrol_get_retval_obj($error, $exceptionsmsg);
-}
 
-/**
- * Build return object.
- *
- * @param string $error
- * @param array $exceptionsmsg
- * @return stdClass
- */
-function local_bulkenrol_get_retval_obj(string $error, array $exceptionsmsg): stdClass {
     $retval = new stdClass();
     $retval->status = '';
     $retval->text = '';
@@ -611,47 +558,77 @@ function local_bulkenrol_display_table($localbulkenroldata, $key) {
                 break;
 
             case LOCALBULKENROL_ENROLUSERS:
-                $data = [];
+                $rowdata = [];
 
-                if (!empty($localbulkenroldata->moodleusers_for_email)) {
-                    foreach ($localbulkenroldata->moodleusers_for_email as $email => $user) {
+                if (!empty($localbulkenroldata->moodleusers_for_data)) {
+                    foreach ($localbulkenroldata->moodleusers_for_data as $data => $user) {
                         $row = [];
 
                         $cell = new html_table_cell();
-                        $cell->text = $user->user->email;
+                        $cell->text = $data;
                         $row[] = $cell;
 
                         $cell = new html_table_cell();
-                        $cell->text = $user->user->firstname;
+                        $cell->text = $user->firstname;
                         $row[] = $cell;
 
                         $cell = new html_table_cell();
-                        $cell->text = $user->user->lastname;
-                        $row[] = $cell;
-
-                        $cell = new html_table_cell();
-                        $cell->text = '';
-                        $cell->text = html_writer::tag(
-                            'span',
-                            get_string($user->action, 'local_bulkenrol'),
-                            ['class' => 'badge bg-'
-                                . (strpos($user->action, '_yes')
-                                    ? 'success text-light'
-                                    : 'secondary text-dark'
-                                ),
-                            ]
-                        );
+                        $cell->text = $user->lastname;
                         $row[] = $cell;
 
                         $cell = new html_table_cell();
                         $cell->text = '';
-                        if (!empty($localbulkenroldata->user_groups[$email])) {
-                            $cell->text = implode('<br class="mb-2" />', $localbulkenroldata->user_groups[$email]);
+                        if (!empty($localbulkenroldata->user_enroled[$data])) {
+                            $cell->text = html_writer::tag('span',
+                                get_string('user_enroled_yes', 'local_bulkenrol'),
+                                array('class' => 'badge badge-secondary'));
+                        } else {
+                            $cell->text = html_writer::tag('span',
+                                get_string('user_enroled_already', 'local_bulkenrol'),
+                                array('class' => 'badge badge-secondary'));
                         }
                         $row[] = $cell;
 
-                        $data[] = $row;
+                        $cell = new html_table_cell();
+                        $cell->text = '';
+                        if (!empty($localbulkenroldata->user_groups[$data])) {
+                            $cell->text = implode(',<br />', $localbulkenroldata->user_groups[$data]);
+                        }
+                        $row[] = $cell;
+
+                        $rowdata[] = $row;
                     }
+                }
+
+                foreach ($localbulkenroldata->users_to_be_created as $username) {
+                    $row = [];
+
+                    $cell = new html_table_cell();
+                    $cell->text = $username;
+                    $row[] = $cell;
+
+                    $cell = new html_table_cell();
+                    $cell->text = "NOCH NICHT";
+                    $row[] = $cell;
+
+                    $cell = new html_table_cell();
+                    $cell->text = "ANGEMELDET";
+                    $row[] = $cell;
+
+                    $cell = new html_table_cell();
+                    $cell->text = html_writer::tag('span',
+                        get_string('user_to_be_created', 'local_bulkenrol'),
+                        array('class' => 'badge badge-secondary'));
+                    $row[] = $cell;
+
+                    $cell = new html_table_cell();
+                    $cell->text = '';
+                    if (!empty($localbulkenroldata->user_groups[$username])) {
+                        $cell->text = implode(',<br />', $localbulkenroldata->user_groups[$username]);
+                    }
+                    $row[] = $cell;
+
+                    $rowdata[] = $row;
                 }
 
                 $table = new html_table();
@@ -660,14 +637,16 @@ function local_bulkenrol_display_table($localbulkenroldata, $key) {
                 $table->summary = get_string('users_to_enrol_in_course', 'local_bulkenrol');
                 $table->size = ['20%', '17%', '17%', '20%', '26%'];
                 $table->head = [];
-                $table->head[] = get_string('email');
+                $table->size = ['20%', '17%', '17%', '20%', '26%'];
+                $table->head = [];
+                $table->head[] = get_string('identifying_data', 'local_bulkenrol');
                 $table->head[] = get_string('firstname');
                 $table->head[] = get_string('lastname');
                 $table->head[] = get_string('user_enroled', 'local_bulkenrol');
                 $table->head[] = get_string('user_groups', 'local_bulkenrol');
-                $table->data = $data;
+                $table->data = $rowdata;
 
-                if (!empty($data)) {
+                if (!empty($rowdata)) {
                     echo $OUTPUT->heading(get_string('users_to_enrol_in_course', 'local_bulkenrol'), 3);
                     echo html_writer::tag('div', html_writer::table($table), ['class' => 'flexible-wrap mb-4']);
                 }
@@ -680,7 +659,7 @@ function local_bulkenrol_display_table($localbulkenroldata, $key) {
                     $courseid = required_param('id', PARAM_INT);
                     $existingcoursegroups = groups_get_all_groups($courseid, 0, 0, 'id, name');
 
-                    foreach (array_keys($localbulkenroldata->course_groups) as $name) {
+                    foreach ($localbulkenroldata->course_groups as $name => $members) {
                         $groupname = trim($name);
 
                         // Check if group already exists.
@@ -788,8 +767,8 @@ function local_bulkenrol_is_already_member($courseid, $groupname, $userid) {
             }
         }
     } catch (Exception $e) {
-        $msg = get_string('error_group_add_members', 'local_bulkenrol');
-        $exceptionsmsg[] = $msg;
+        $msg = get_string('error_group_add_members', 'local_bulkenrol').local_bulkenrol_get_exception_info($e);
+        $result->error = $msg;
     }
     return $result;
 }

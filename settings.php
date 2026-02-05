@@ -27,6 +27,18 @@ defined('MOODLE_INTERNAL') || die;
 // Require library.
 require_once($CFG->dirroot . '/local/bulkenrol/lib.php');
 
+$filtercustombyunique = true;
+
+$usertableoptions = [
+    "email",
+    "idnumber",
+    "username"
+];
+
+$standardoptions = [
+    "u_email"
+];
+
 if ($hassiteconfig) {
     $settings = new admin_settingpage('local_bulkenrol', get_string('pluginname', 'local_bulkenrol', null, true));
 
@@ -46,6 +58,7 @@ if ($hassiteconfig) {
             )
         );
         unset($enroloptions);
+
 
         // Create role chooser widget.
         $roleoptions = [];
@@ -93,6 +106,50 @@ if ($hassiteconfig) {
             )
         );
         unset($navigationoptions);
+
+        $settings->add(
+            new admin_setting_configcheckbox(
+                'local_bulkenrol/create_on_the_fly',
+                get_string('on_the_fly', 'local_bulkenrol'),
+                get_string('on_the_fly_desc', 'local_bulkenrol'),
+                false
+            )
+        );
+
+        $settings->add(
+            new admin_setting_configtext(
+                'local_bulkenrol/email_suffix',
+                get_string('email_suffix', 'local_bulkenrol'),
+                get_string('email_suffix_desc', 'local_bulkenrol'),
+                'uni-muenster.de'
+            )
+        );
+
+        global $DB;
+        $fields = [];
+        foreach ($usertableoptions as $fieldname) {
+            if (!in_array($fieldname, $usertableoptions)) {
+                continue;
+            }
+            $fields["u_" . $fieldname] = $fieldname;
+        }
+
+        $sql = "SELECT id, name, forceunique FROM {user_info_field} WHERE forceunique = 1";
+        $customfields = $DB->get_records_sql_menu($sql);
+
+        foreach($customfields as $id => $name) {
+            $fields["c_" . $id] = $name;
+        }
+
+        $settings->add(
+            new admin_setting_configmultiselect(
+                'local_bulkenrol/fieldoptions',
+                get_string('fieldoptions', 'local_bulkenrol'),
+                get_string('fieldoptions_desc', 'local_bulkenrol'),
+                $standardoptions,
+                $fields
+            )
+        );
     }
 
     $ADMIN->add('enrolments', $settings);

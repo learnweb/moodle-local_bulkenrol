@@ -39,9 +39,8 @@ Feature: Using the local_bulkenrol plugin for group management
       | Group 3 | C1     | CG3      |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I select "Participants" from secondary navigation
-    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
-    And I set the field "List of e-mail addresses" to multiline:
+    And I navigate to "Users > User bulk enrolment" in current page administration
+    And I set the field "List of users identified by your chosen field" to multiline:
       """
       # Group 1
       student1@example.com
@@ -50,25 +49,18 @@ Feature: Using the local_bulkenrol plugin for group management
       # Group 3
       student3@example.com
       """
-    And I click on "Execute user enrolment" "button"
+    And I click on "Enrol users" "button"
     Then the following should exist in the "localbulkenrol_groupinfos" table:
       | Group name | Group status         |
       | Group 1    | Group already exists |
       | Group 2    | Group already exists |
       | Group 3    | Group already exists |
     And the following should exist in the "localbulkenrol_enrolusers" table:
-      | Email address        | First name | Last name | User enrolment        | Group membership |
-      | student1@example.com | Student    | 1         | User will be enrolled | Group 1          |
-      | student2@example.com | Student    | 2         | User will be enrolled | Group 2          |
-      | student3@example.com | Student    | 3         | User will be enrolled | Group 3          |
-    # We have to check the group membership action badge in a separate step,
-    # otherwise we would trigger the 'Table contains duplicate column headers' coding exception message.
-    And the following should exist in the "localbulkenrol_enrolusers" table:
-      | Email address        | Group membership            |
-      | student1@example.com | User will be added to group |
-      | student2@example.com | User will be added to group |
-      | student3@example.com | User will be added to group |
-    And I click on "Execute user enrolment" "button"
+      | Email address        | First name | Last name | User enrolment        | Group membership | Group membership            |
+      | student1@example.com | Student    | 1         | User will be enrolled | Group 1          | User will be added to group |
+      | student2@example.com | Student    | 2         | User will be enrolled | Group 2          | User will be added to group |
+      | student3@example.com | Student    | 3         | User will be enrolled | Group 3          | User will be added to group |
+    And I click on "Enrol users" "button"
     Then the following should exist in the "participants" table:
       | Email address        | First name | Last name | Roles   | Groups  |
       | student1@example.com | Student    | 1         | Student | Group 1 |
@@ -86,31 +78,24 @@ Feature: Using the local_bulkenrol plugin for group management
       | Group 2 | C1     | CG2      |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I select "Participants" from secondary navigation
-    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
-    And I set the field "List of e-mail addresses" to multiline:
+    And I navigate to "Users > User bulk enrolment" in current page administration
+    And I set the field "List of users identified by your chosen field" to multiline:
       """
       # Group 1
       student1@example.com
       # Group 2
       student2@example.com
       """
-    And I click on "Execute user enrolment" "button"
+    And I click on "Enrol users" "button"
     Then the following should exist in the "localbulkenrol_groupinfos" table:
       | Group name | Group status         |
       | Group 1    | Group already exists |
       | Group 2    | Group already exists |
     And the following should exist in the "localbulkenrol_enrolusers" table:
-      | Email address        | First name | Last name | User enrolment           | Group membership |
-      | student1@example.com | Student    | 1         | User is already enrolled | Group 1          |
-      | student2@example.com | Student    | 2         | User is already enrolled | Group 2          |
-    # We have to check the group membership action badge in a separate step,
-    # otherwise we would trigger the 'Table contains duplicate column headers' coding exception message.
-    And the following should exist in the "localbulkenrol_enrolusers" table:
-      | Email address        | Group membership            |
-      | student1@example.com | User will be added to group |
-      | student2@example.com | User will be added to group |
-    And I click on "Execute user enrolment" "button"
+      | Email address        | First name | Last name | User enrolment           | Group membership | Group membership            |
+      | student1@example.com | Student    | 1         | User is already enrolled | Group 1          | User will be added to group |
+      | student2@example.com | Student    | 2         | User is already enrolled | Group 2          | User will be added to group |
+    And I click on "Enrol users" "button"
     Then the following should exist in the "participants" table:
       | Email address        | First name | Last name | Roles   | Groups  |
       | student1@example.com | Student    | 1         | Student | Group 1 |
@@ -131,31 +116,24 @@ Feature: Using the local_bulkenrol plugin for group management
       | CG2   | student2 |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I select "Participants" from secondary navigation
-    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
-    And I set the field "List of e-mail addresses" to multiline:
+    And I navigate to "Users > User bulk enrolment" in current page administration
+    And I set the field "List of users identified by your chosen field" to multiline:
       """
       # Group 1
       student1@example.com
       # Group 2
       student2@example.com
       """
-    And I click on "Execute user enrolment" "button"
+    And I click on "Enrol users" "button"
     Then the following should exist in the "localbulkenrol_groupinfos" table:
       | Group name | Group status         |
       | Group 1    | Group already exists |
       | Group 2    | Group already exists |
     And the following should exist in the "localbulkenrol_enrolusers" table:
-      | Email address        | First name | Last name | User enrolment           | Group membership |
-      | student1@example.com | Student    | 1         | User is already enrolled | Group 1          |
-      | student2@example.com | Student    | 2         | User is already enrolled | Group 2          |
-    # We have to check the group membership action badge in a separate step,
-    # otherwise we would trigger the 'Table contains duplicate column headers' coding exception message.
-    And the following should exist in the "localbulkenrol_enrolusers" table:
-      | Email address        | Group membership             |
-      | student1@example.com | User is already group member |
-      | student2@example.com | User is already group member |
-    And I click on "Execute user enrolment" "button"
+      | Email address        | First name | Last name | User enrolment           | Group membership | Group membership             |
+      | student1@example.com | Student    | 1         | User is already enrolled | Group 1          | User is already group member |
+      | student2@example.com | Student    | 2         | User is already enrolled | Group 2          | User is already group member |
+    And I click on "Enrol users" "button"
     Then the following should exist in the "participants" table:
       | Email address        | First name | Last name | Roles   | Groups  |
       | student1@example.com | Student    | 1         | Student | Group 1 |
@@ -167,60 +145,21 @@ Feature: Using the local_bulkenrol plugin for group management
       | Group 1 | C1     | CG1      |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage
-    And I select "Participants" from secondary navigation
-    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
-    And I set the field "List of e-mail addresses" to multiline:
+    And I navigate to "Users > User bulk enrolment" in current page administration
+    And I set the field "List of users identified by your chosen field" to multiline:
       """
       # Group 1
       student1@example.com
       # Group 2
       student2@example.com
       """
-    And I click on "Execute user enrolment" "button"
+    And I click on "Enrol users" "button"
     Then the following should exist in the "localbulkenrol_groupinfos" table:
       | Group name | Group status          |
       | Group 1    | Group already exists  |
       | Group 2    | Group will be created |
-    And I click on "Execute user enrolment" "button"
+    And I click on "Enrol users" "button"
     Then the following should exist in the "participants" table:
       | Email address        | First name | Last name | Roles   | Groups  |
       | student1@example.com | Student    | 1         | Student | Group 1 |
       | student2@example.com | Student    | 2         | Student | Group 2 |
-
-  Scenario: Use the plugin just to change group assignments
-    Given the following "course enrolments" exist:
-      | user     | course | role    |
-      | student1 | C1     | student |
-      | student2 | C1     | student |
-    And the following "groups" exist:
-      | name    | course | idnumber |
-      | Group 1 | C1     | CG1      |
-      | Group 2 | C1     | CG2      |
-      | Group 3 | C1     | CG3      |
-    And the following "group members" exist:
-      | group | user     |
-      | CG1   | student1 |
-      | CG2   | student2 |
-      | CG3   | student2 |
-    When I log in as "teacher1"
-    And I am on "Course 1" course homepage
-    And I select "Participants" from secondary navigation
-    And I set the field "Participants tertiary navigation" to "User bulk enrolment"
-    And I set the field "List of e-mail addresses" to multiline:
-      """
-      # Group 1
-      !student1@example.com student2@example.com
-      # Group 2
-      student1@example.com
-      ! student2@example.com
-      """
-    And I click on "Execute user enrolment" "button"
-    Then I should see "User will be removed from group" in the "//table[@id='localbulkenrol_enrolusers']/tbody/tr[1]/td[5]/span[1]" "xpath"
-    And I should see "User will be added to group" in the "//table[@id='localbulkenrol_enrolusers']/tbody/tr[1]/td[5]/span[2]" "xpath"
-    And I should see "User is not member of the group" in the "//table[@id='localbulkenrol_enrolusers']/tbody/tr[2]/td[5]/span[1]" "xpath"
-    And I should see "User will be removed from group" in the "//table[@id='localbulkenrol_enrolusers']/tbody/tr[2]/td[5]/span[2]" "xpath"
-    And I click on "Execute user enrolment" "button"
-    Then the following should exist in the "participants" table:
-      | Email address        | First name | Last name | Roles   | Groups  |
-      | student1@example.com | Student    | 1         | Student | Group 2 |
-      | student2@example.com | Student    | 2         | Student | Group 3 |
