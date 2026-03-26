@@ -234,7 +234,7 @@ function local_bulkenrol_parse_data($data) {
  * @return array [string,object[]]
  */
 function local_bulkenrol_get_user($data, $datafield) {
-    global $DB;
+    global $DB, $CFG;
 
     $error = null;
     $userrecord = null;
@@ -267,7 +267,20 @@ function local_bulkenrol_get_user($data, $datafield) {
                 $userrecord = current($userrecords);
             }
         } else {
-            $error = get_string('error_no_record_found_for_data', 'local_bulkenrol', $data);
+            $emailsuffix = get_config('local_bulkenrol', 'email_suffix');
+            if (empty($emailsuffix)) {
+                throw new \Exception("Emailsuffix may not be empty");
+            }
+            $user = new \stdClass();
+            $user->auth = 'ldap';
+            $user->confirmed = true;
+            $user->mnethostid = $CFG->mnet_localhost_id;
+            $user->username = $data;
+            $user->firstname = "NOCH NICHT";
+            $user->lastname = "EINGELOGGT";
+            $user->email = $data . '@' . $emailsuffix;
+            $new_user_id = user_create_user($user);
+            $userrecord = \core_user::get_user($new_user_id);
         }
     } catch (Exception $e) {
         $error = get_string('error_getting_user_for_data', 'local_bulkenrol', $data) . local_bulkenrol_get_exception_info($e);
